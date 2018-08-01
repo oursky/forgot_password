@@ -145,6 +145,30 @@ def fetch_user_record(auth_id):
     return deserialize_record(resp['result'][0])
 
 
+def fetch_customer_profile(auth_id):
+    """
+    Fetch the customer profile from backend server. The returned value
+    is a dictionary.
+    """
+    container = SkygearContainer(
+        api_key=skyoptions.masterkey
+    )
+
+    resp = container.send_action("server:profile-get", {
+        "args": [
+            {
+                "auth_id": auth_id
+            }
+        ]
+    }, plugin_request=True)
+    try:
+        if "error" in resp:
+            raise SkygearException.from_dict(resp["error"])
+    except (ValueError, TypeError, KeyError):
+        raise SkygearContainer("container.send_action is buggy")
+    return resp['result']["profile"]
+
+
 def save_user_record(user_record):
     """
     Save the user record to Skygear Record API.

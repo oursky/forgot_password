@@ -32,6 +32,7 @@ from .util.schema import (schema_add_key_verified_acl,
 from .util.user import fetch_user_record, get_user, save_user_record
 from .util.verify_code import (add_verify_code, generate_code, get_verify_code,
                                set_code_consumed, verified_flag_name)
+from .util.user import fetch_customer_profile
 
 logger = logging.getLogger(__name__)
 try:
@@ -289,7 +290,8 @@ class VerifyRequestLambda:
     def get_code(self, record_key):
         return generate_code(self.settings.keys[record_key].code_format)
 
-    def get_template_params(self, record_key, user, user_record, code_str):
+    def get_template_params(self, record_key, user,
+                            user_record, code_str, customer_profile):
         url_prefix = self.settings.url_prefix
         if url_prefix.endswith('/'):
             url_prefix = url_prefix[:-1]
@@ -304,17 +306,19 @@ class VerifyRequestLambda:
             'user_id': user.id,
             'code': code_str,
             'user': user,
-            'user_record': user_record
+            'user_record': user_record,
+            'customer_profile': customer_profile
         }
         return template_params
 
-    def call_provider(self, record_key, user, user_record, code_str):
+    def call_provider(self, record_key, user,
+                      user_record, code_str, customer_profile):
         """
         Call the provider, meaning sending verification.
         """
         provider = self.providers[record_key]
         template_params = self.get_template_params(
-            record_key, user, user_record, code_str
+            record_key, user, user_record, code_str, customer_profile
         )
         value_to_verify = user_record.get(record_key)
         provider.send(value_to_verify, template_params)
@@ -337,6 +341,11 @@ class VerifyRequestLambda:
             msg = 'user `{}` not found'.format(auth_id)
             raise SkygearException(msg, skyerror.ResourceNotFound)
 
+        customer_profile = fetch_customer_profile(auth_id)
+        if not customer_profile:
+            msg = 'profile `{}` not found'.format(auth_id)
+            raise SkygearException(msg, skyerror.ResourceNotFound)
+
         value_to_verify = user_record.get(record_key)
         if not value_to_verify:
             msg = 'there is nothing to verify for record_key `{}` ' \
@@ -352,7 +361,8 @@ class VerifyRequestLambda:
             logger.info('Added new verify code `{}` for user `{}`.'.format(
                 code_str, auth_id
             ))
-        self.call_provider(record_key, user, user_record, code_str)
+        self.call_provider(record_key, user,
+                           user_record, code_str, customer_profile)
 
 
 class VerifyRequestTestLambda(VerifyRequestLambda):
